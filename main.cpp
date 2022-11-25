@@ -30,6 +30,32 @@ Photon spawn_photon_cone(double spread, double energy, double rv) {
     return Photon(position, direction, energy);
 }
 
+void gen_klein_nishina_table(double (*array)[70][181]) {
+    // generates 10 keV increments of KN cross section distribution from 10 to 710 keV. 
+    // with 1 degree angular resolution from 0 to 180 degrees.
+    // i.e. a table 70 by 181 of doubles, representing cumulative distribution of Klein-Nishina
+    // probability of scattering, normalized so that at 180 degrees, the value is 1.
+    double energy;
+    for (int i = 0; i < 70; i++) {
+        energy = i * 10 + 10;
+        // KN cross section CDF for this energy at each angle
+        double cumulate = 0.0;
+        for (int angle = 0; angle < 181; angle++) {
+            double theta = angle * PI / 180;
+            double epsilon = energy / 511;
+            double lamb_ratio = 1 / (1 + epsilon * (1 - cos(theta)));
+            double dsigdomega = pow(lamb_ratio, 2) * (lamb_ratio + (1/lamb_ratio) - pow(sin(theta), 2));
+            cumulate += dsigdomega;
+            (*array)[i][angle] = cumulate;
+        }
+        // normalize the CDF
+        double factor = 1.0 / (*array)[i][180];
+        for (int angle = 0; angle < 181; angle ++) {
+           (*array)[i][angle] = (*array)[i][angle] * factor;
+        }
+    }
+}
+
 int main()
 {
     // make our cylinders
@@ -97,7 +123,8 @@ int main()
                         break;
                     }
                     if (rv() < objects[obj_id].P_scatter) {
-                        photon.scatter_KN();
+
+                        photon.scatter();
                     }
                 }
                 // move always
