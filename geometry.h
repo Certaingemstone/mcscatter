@@ -10,7 +10,7 @@ struct Object
 {
         double P_scatter;
         double P_absorb;
-        bool is_inside(Vector3d* point);
+        bool is_inside(Vector3d* point) { return false; };
 };
 
 class Cylinder : public Object
@@ -27,13 +27,13 @@ class Cylinder : public Object
         // std::optional<Vector3d> ray_intersect(Vector3d &point, Vector3d &direction);
 };
 
-inline Cylinder::Cylinder(Vector3d cent, Eigen::Matrix3d rot, double length, double radius, double sct, double abs) {
+inline Cylinder::Cylinder(Vector3d cent, Eigen::Matrix3d rot, double len, double radius, double sct, double abs) {
     // Rotate axis from z axis using rotation matrix. Then translate to center.
     Vector3d u {{0,0,1}};
     axis = (rot * u).normalized();
     rotation_inv = rot.inverse();
     center = cent;
-    length = length;
+    length = len;
     radius2 = std::pow(radius, 2);
     P_scatter = sct;
     P_absorb = abs;
