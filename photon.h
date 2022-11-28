@@ -12,7 +12,7 @@ class Photon {
         Vector3d position;
         Vector3d direction; // is normalized by constructor
         double energy; // in keV
-        std::vector<std::tuple<Vector3d, double>> events; // past positions and energies dissipated
+        std::vector<std::tuple<Vector3d, double, int>> events; // past positions energies dissipated and object IDs
     public:
         Photon(Vector3d pos, Vector3d dir, double e);
         void move(); // move one unit in direction
@@ -20,16 +20,16 @@ class Photon {
         Vector3d* get_position();
         Vector3d* get_direction();
         double get_energy();
-        std::vector<std::tuple<Vector3d, double>>* get_events();
-        void scatter(double theta, double phi); // change direction, and change energy according to Compton
-        void absorb(); // dump all energy at current position
+        std::vector<std::tuple<Vector3d, double, int>>* get_events();
+        void scatter(double theta, double phi, int obj_id); // change direction, and change energy according to Compton
+        void absorb(int obj_id); // dump all energy at current position
 };
 
 inline Photon::Photon(Vector3d pos, Vector3d dir, double e) {
     position = pos;
     direction = dir.normalized();
     energy = e;
-    events.push_back(std::tuple<Vector3d, double> {position, 0.0});
+    events.push_back(std::tuple<Vector3d, double, int> {position, 0.0, -1});
 }
 
 inline Vector3d* Photon::get_position() {
@@ -41,22 +41,22 @@ inline Vector3d* Photon::get_direction() {
 inline double Photon::get_energy() {
     return energy;
 }
-inline std::vector<std::tuple<Vector3d, double>>* Photon::get_events() {
+inline std::vector<std::tuple<Vector3d, double, int>>* Photon::get_events() {
     return &events;
 }
 inline void Photon::move() {
     position = position + direction;
 }
 
-inline void Photon::absorb() {
-    events.push_back(std::tuple<Vector3d, double> {position, energy});
+inline void Photon::absorb(int obj_id) {
+    events.push_back(std::tuple<Vector3d, double, int> {position, energy, obj_id});
     energy = 0;
 }
 
-inline void Photon::scatter(double theta, double phi) {
+inline void Photon::scatter(double theta, double phi, int obj_id) {
     // given an angle (radians), performs Compton scattering by angle theta, in a plane of angle phi
     double Efrac = 1 / (1 + (energy / 511) * (1 - cos(theta))); // assume electron, 511keV
-    events.push_back(std::tuple<Vector3d, double> {position, energy - Efrac * energy});
+    events.push_back(std::tuple<Vector3d, double, int> {position, energy - Efrac * energy, obj_id});
     energy = Efrac * energy;
     // get orthonormal basis vector including direciton
     Vector3d v1 = Vector3d {{0,0,1}};

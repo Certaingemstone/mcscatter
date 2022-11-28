@@ -13,19 +13,22 @@ using Eigen::Vector3d;
 
 #define PI 3.14159265
 
-const int N_BATCH = 10;
+const int N_BATCH = 4;
 const int N_PHOTONS_BATCH = 32768;
-const int PHOTON_LIFETIME = 900;
+const int PHOTON_LIFETIME = 1000;
+const double P_SCATTER = 0.01;
+const double P_ABSORB = 0.005;
+const double SCATTER_ANGLE = PI / 6;
+const double CONE_ANGLE = 0.08;
 const std::string OUT_FILE = "result.csv";
-//const double MIN_ENERGY = 5.0;
 
-Photon spawn_photon_cone(double spread, double energy, double rv) {
+Photon spawn_photon_cone(double spread, double energy, double rv_theta, double rv_phi) {
     // return a Photon with a direction in a cone centered on z axis,
     // starting at the origin, spread by angle (radian) spread
     // requires a random variable with some distribution on range (0,1)
     double zmin = cos(spread);
-    double phi = 2*PI*rv;
-    double z = rv * (1 - zmin) + zmin;
+    double phi = 2*PI*rv_phi;
+    double z = rv_theta * (1 - zmin) + zmin;
     double param = sqrt(1-pow(z, 2));
     Vector3d direction {{param*cos(phi), param*sin(phi), z}};
     Vector3d position{{0, 0, 0}};
@@ -86,7 +89,7 @@ int main()
     // (overwrites existing)
     std::ofstream outfile;
     outfile.open(OUT_FILE);
-    outfile << "id,x,y,z,E,\n";
+    outfile << "id,x,y,z,E,obj_id,\n";
     outfile.close();
 
     // generate lookup table for angle probabilities by energy
@@ -95,17 +98,15 @@ int main()
 
     // make our cylinders
     std::vector<Cylinder> objects;
-    const double P_absorb = 0.1;
-    const double P_scatter = 0.1;
-    const double theta = PI / 6;
-    double sintheta = sin(theta);
-    double costheta = cos(theta);
+    double sintheta = sin(SCATTER_ANGLE);
+    double costheta = cos(SCATTER_ANGLE);
+
     Eigen::Matrix3d rotX90; // recoil detector
     Vector3d recoil_center = Vector3d{{0, 0, 350}};
     rotX90 << 1, 0, 0,
               0, 0, -1,
               0, 1, 0;
-    Cylinder recoil(recoil_center, rotX90, 50.8, 25.4, P_scatter, P_absorb);
+    Cylinder recoil(recoil_center, rotX90, 50.8, 25.4, P_SCATTER, P_ABSORB);
     objects.push_back(recoil);
 
     Eigen::Matrix3d rotY; // scatter detector
@@ -113,7 +114,7 @@ int main()
             0,        1,         0,
             sintheta, 0, costheta;
     Vector3d scatter_center = recoil_center + rotY * Vector3d{{0, 0, 250}};
-    Cylinder scatter(scatter_center, rotY, 50.8, 25.4, P_scatter, P_absorb);
+    Cylinder scatter(scatter_center, rotY, 50.8, 25.4, P_SCATTER, P_ABSORB);
     objects.push_back(scatter);
 
     // make our beam blocks...
@@ -135,8 +136,7 @@ int main()
         // spawn photons
         std::vector<Photon> photon_batch;
         for (int i = 0; i < N_PHOTONS_BATCH; i++) {
-            double rand = rv();
-            photon_batch.push_back(spawn_photon_cone(0.08, 661.6, rand));
+            photon_batch.push_back(spawn_photon_cone(CONE_ANGLE, 661.6, rv(), rv()));
         }
         photon_batch.shrink_to_fit();
 
@@ -161,14 +161,14 @@ int main()
                 // scatter and absorb if inside something
                 if (inside) {
                     if (rv() < objects[obj_id].P_absorb) {
-                        (*photon_ptr).absorb();
+                        (*photon_ptr).absorb(obj_id);
                         alive = false;
                         break;
                     }
                     if (rv() < objects[obj_id].P_scatter) {
                         double theta = theta_klein_nishina(&knLUT, (*photon_ptr).get_energy(), rv());
                         double phi = 2 * PI * rv();
-                        (*photon_ptr).scatter(theta, phi);
+                        (*photon_ptr).scatter(theta, phi, obj_id);
                     }
                 }
                 // move always
@@ -176,7 +176,7 @@ int main()
             }
             // at end of life, absorb wherever it is
             if (alive) {
-                (*photon_ptr).absorb();
+                (*photon_ptr).absorb(-1);
             }
         }   
 
@@ -186,10 +186,11 @@ int main()
         for (int k = 0; k < N_PHOTONS_BATCH; k++) {
             int id = k + (N_PHOTONS_BATCH * batch);
             Photon * photon_ptr = &photon_batch[k];
-            for (std::tuple<Vector3d, double> event : *(*photon_ptr).get_events()) {
+            for (std::tuple<Vector3d, double, int> event : *(*photon_ptr).get_events()) {
                 Vector3d pos = std::get<0>(event);
                 double energy = std::get<1>(event);
-                outfile << id << "," << pos[0] << "," << pos[1] << "," << pos[2] << "," << energy << std::endl; 
+                int obj_id = std::get<2>(event);
+                outfile << id << "," << pos[0] << "," << pos[1] << "," << pos[2] << "," << energy << "," << obj_id << std::endl; 
             }
         }
         outfile.close();

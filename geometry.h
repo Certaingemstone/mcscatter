@@ -42,9 +42,9 @@ inline Cylinder::Cylinder(Vector3d cent, Eigen::Matrix3d rot, double len, double
 inline bool Cylinder::is_inside(Vector3d* point) {
     // Check if point is inside cylinder
     Vector3d p = *point - center;
-    double proj = std::abs(axis.dot(p)); // projection onto axis
+    double proj = axis.dot(p); // projection onto axis
     double distance2 = (p - proj * axis).squaredNorm(); // distance square to axis
-    return distance2 < radius2 && proj < (length / 2.0);
+    return distance2 < radius2 && std::abs(proj) < (length / 2.0);
 }
 
 /*
