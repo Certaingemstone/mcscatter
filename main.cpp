@@ -10,15 +10,16 @@ using Eigen::Vector3d;
 
 #include "geometry.h"
 #include "photon.h"
+#include "xsec.h"
+#include "material.h"
 
 #define PI 3.14159265
 
 const int N_BATCH = 4;
 const int N_PHOTONS_BATCH = 32768;
 const int PHOTON_LIFETIME = 1000;
-const double P_SCATTER = 0.01;
-const double P_ABSORB = 0.005;
-const double SCATTER_ANGLE = PI / 6;
+//const double P_SCATTER = 0.01;
+//const double P_ABSORB = 0.005;
 const double CONE_ANGLE = 0.08;
 const std::string OUT_FILE = "result.csv";
 
@@ -83,8 +84,10 @@ int theta_klein_nishina(double (*LUT)[70][181], double energy, double rv) {
     return p1 - &cdf[0];
 }
 
-int main()
-{
+int main(void) {
+    double scatter_angle;
+    std::cin >> scatter_angle;
+
     // prepare file for writing
     // (overwrites existing)
     std::ofstream outfile;
@@ -96,17 +99,22 @@ int main()
     double knLUT[70][181];
     gen_klein_nishina_table(&knLUT);
 
+    // material
+    double NaI_e_dens = 9.3883e20; // mm^-3
+    int NaI_Z = 38;
+    Material NaI = Material(NaI_e_dens, NaI_Z);
+
     // make our cylinders
     std::vector<Cylinder> objects;
-    double sintheta = sin(SCATTER_ANGLE);
-    double costheta = cos(SCATTER_ANGLE);
+    double sintheta = sin(scatter_angle);
+    double costheta = cos(scatter_angle);
 
     Eigen::Matrix3d rotX90; // recoil detector
     Vector3d recoil_center = Vector3d{{0, 0, 350}};
     rotX90 << 1, 0, 0,
               0, 0, -1,
               0, 1, 0;
-    Cylinder recoil(recoil_center, rotX90, 50.8, 25.4, P_SCATTER, P_ABSORB);
+    Cylinder recoil(recoil_center, rotX90, 50.8, 25.4, &NaI);
     objects.push_back(recoil);
 
     Eigen::Matrix3d rotY; // scatter detector
@@ -114,7 +122,7 @@ int main()
             0,        1,         0,
             sintheta, 0, costheta;
     Vector3d scatter_center = recoil_center + rotY * Vector3d{{0, 0, 250}};
-    Cylinder scatter(scatter_center, rotY, 50.8, 25.4, P_SCATTER, P_ABSORB);
+    Cylinder scatter(scatter_center, rotY, 50.8, 25.4, &NaI);
     objects.push_back(scatter);
 
     // make our beam blocks...
@@ -160,12 +168,15 @@ int main()
                 }
                 // scatter and absorb if inside something
                 if (inside) {
-                    if (rv() < objects[obj_id].P_absorb) {
+                    Material * mat_ptr = objects[obj_id].material;
+                    double P_absorb = (*mat_ptr).absorption_probability((*photon_ptr).get_energy());
+                    double P_scatter = (*mat_ptr).scattering_probability((*photon_ptr).get_energy());
+                    if (rv() < P_absorb) {
                         (*photon_ptr).absorb(obj_id);
                         alive = false;
                         break;
                     }
-                    if (rv() < objects[obj_id].P_scatter) {
+                    if (rv() < P_scatter) {
                         double theta = theta_klein_nishina(&knLUT, (*photon_ptr).get_energy(), rv());
                         double phi = 2 * PI * rv();
                         (*photon_ptr).scatter(theta, phi, obj_id);
@@ -198,4 +209,3 @@ int main()
     }
     return 0;
 }
-
