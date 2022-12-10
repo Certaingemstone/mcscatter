@@ -15,7 +15,6 @@ using Eigen::Vector3d;
 
 #define PI 3.14159265
 
-const int N_BATCH = 4;
 const int N_PHOTONS_BATCH = 32768;
 const int PHOTON_LIFETIME = 1000;
 //const double P_SCATTER = 0.01;
@@ -86,7 +85,13 @@ int theta_klein_nishina(double (*LUT)[70][181], double energy, double rv) {
 
 int main(void) {
     double scatter_angle;
+    std::cout << "Enter scatter detector angle (degrees): ";
     std::cin >> scatter_angle;
+    scatter_angle = scatter_angle * PI / 180;
+
+    int n_batch;
+    std::cout << "Enter number of batches: ";
+    std::cin >> n_batch;
 
     // prepare file for writing
     // (overwrites existing)
@@ -99,10 +104,9 @@ int main(void) {
     double knLUT[70][181];
     gen_klein_nishina_table(&knLUT);
 
-    // material
+    // material properties
     double NaI_e_dens = 9.3883e20; // mm^-3
     int NaI_Z = 38;
-    Material NaI = Material(NaI_e_dens, NaI_Z);
 
     // make our cylinders
     std::vector<Cylinder> objects;
@@ -114,7 +118,7 @@ int main(void) {
     rotX90 << 1, 0, 0,
               0, 0, -1,
               0, 1, 0;
-    Cylinder recoil(recoil_center, rotX90, 50.8, 25.4, &NaI);
+    Cylinder recoil(recoil_center, rotX90, 50.8, 25.4, Material {NaI_e_dens, NaI_Z});
     objects.push_back(recoil);
 
     Eigen::Matrix3d rotY; // scatter detector
@@ -122,12 +126,12 @@ int main(void) {
             0,        1,         0,
             sintheta, 0, costheta;
     Vector3d scatter_center = recoil_center + rotY * Vector3d{{0, 0, 250}};
-    Cylinder scatter(scatter_center, rotY, 50.8, 25.4, &NaI);
+    Cylinder scatter(scatter_center, rotY, 50.8, 25.4, Material {NaI_e_dens, NaI_Z});
     objects.push_back(scatter);
 
     // make our beam blocks...
     //
-
+    
     const int num_objects = objects.size();
 
     // have a random number generator 
@@ -135,11 +139,9 @@ int main(void) {
     std::uniform_real_distribution<double> distribution(0, 1);
     auto rv = std::bind(distribution, generator);
 
-    std::cout << "Setup OK" << std::endl;
-
     // do a bunch of photon batches, and write the results of each to file
-    for (int batch = 0; batch < N_BATCH; batch++) {
-        std::cout << "Batch " << batch << " of " << N_BATCH;
+    for (int batch = 0; batch < n_batch; batch++) {
+        std::cout << "Batch " << batch << " of " << n_batch;
         std::cout.flush();
         // spawn photons
         std::vector<Photon> photon_batch;
@@ -168,9 +170,8 @@ int main(void) {
                 }
                 // scatter and absorb if inside something
                 if (inside) {
-                    Material * mat_ptr = objects[obj_id].material;
-                    double P_absorb = (*mat_ptr).absorption_probability((*photon_ptr).get_energy());
-                    double P_scatter = (*mat_ptr).scattering_probability((*photon_ptr).get_energy());
+                    double P_absorb = objects[obj_id].material.absorption_probability((*photon_ptr).get_energy());
+                    double P_scatter = objects[obj_id].material.scattering_probability((*photon_ptr).get_energy());
                     if (rv() < P_absorb) {
                         (*photon_ptr).absorb(obj_id);
                         alive = false;

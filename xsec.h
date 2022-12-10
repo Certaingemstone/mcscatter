@@ -20,6 +20,7 @@ double absorb_probability(double electron_density, double distance, double energ
     // Same as KN_probability, but uses approximate absorption cross section for photoelectric absorption
     
 inline double KN(double angle, double energy) {
+    // Klein Nishina differential cross section, angle in degrees, energy in keV
     double theta = angle * 3.14159265 / 180;
     double epsilon = energy / 511;
     double lamb_ratio = 1 / (1 + epsilon * (1 - cos(theta)));
@@ -30,7 +31,7 @@ inline double KN_probability(double electron_density, double distance, double en
     double total_cross_section = 0;
     // integrate over KN for the given energy
     for (int angle = 0; angle < 180; angle++) {
-        total_cross_section += KN(angle, energy);
+        total_cross_section += (KN(angle, energy) * 3.14159265 / 180);
     }
     // convert to solid angle integral
     total_cross_section *= (2 * 3.14159265);
