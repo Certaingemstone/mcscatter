@@ -16,7 +16,7 @@ using Eigen::Vector3d;
 #define PI 3.14159265
 
 const int N_PHOTONS_BATCH = 32768;
-const int PHOTON_LIFETIME = 1000;
+const int PHOTON_LIFETIME = 750;
 //const double P_SCATTER = 0.01;
 //const double P_ABSORB = 0.005;
 const double CONE_ANGLE = 0.08;
@@ -178,9 +178,9 @@ int main(void) {
                         break;
                     }
                     if (rv() < P_scatter) {
-                        double theta = theta_klein_nishina(&knLUT, (*photon_ptr).get_energy(), rv());
+                        double theta = theta_klein_nishina(&knLUT, (*photon_ptr).get_energy(), rv()); // theta in degrees [0,180]
                         double phi = 2 * PI * rv();
-                        (*photon_ptr).scatter(theta, phi, obj_id);
+                        (*photon_ptr).scatter(theta * PI / 180, phi, obj_id);
                     }
                 }
                 // move always
