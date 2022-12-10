@@ -35,6 +35,22 @@ Photon spawn_photon_cone(double spread, double energy, double rv_theta, double r
     return Photon(position, direction.normalized(), energy);
 }
 
+bool coincidence_gate(std::vector<int> obj_ids, Photon* ph) {
+    // Return true if photon interacts with all object ids listed.
+    std::vector<int> interact_ids;
+    for (std::tuple<Vector3d, double, int> event : *(*ph).get_events()) {
+        interact_ids.push_back(std::get<2>(event));
+    }
+    bool c = true;
+    for (int id : obj_ids) {
+        if (!(std::find(interact_ids.begin(), interact_ids.end(), id) != interact_ids.end())) {
+            c = false;
+            break;
+        }
+    }
+    return c;
+}
+
 void gen_klein_nishina_table(double (*array)[70][181]) {
     // generates 10 keV increments of KN cross section distribution from 10 to 710 keV. 
     // with 1 degree angular resolution from 0 to 180 degrees.
@@ -93,6 +109,10 @@ int main(void) {
     std::cout << "Enter number of batches: ";
     std::cin >> n_batch;
 
+    bool coincidence;
+    std::cout << "Restrict to coincidences? (0 or 1)";
+    std::cin >> coincidence;
+
     // prepare file for writing
     // (overwrites existing)
     std::ofstream outfile;
@@ -133,6 +153,9 @@ int main(void) {
     //
     
     const int num_objects = objects.size();
+    
+    // define coincidence requirement
+    std::vector<int> c_ids = {0, 1};
 
     // have a random number generator 
     std::default_random_engine generator;
@@ -198,13 +221,28 @@ int main(void) {
         for (int k = 0; k < N_PHOTONS_BATCH; k++) {
             int id = k + (N_PHOTONS_BATCH * batch);
             Photon * photon_ptr = &photon_batch[k];
-            for (std::tuple<Vector3d, double, int> event : *(*photon_ptr).get_events()) {
-                Vector3d pos = std::get<0>(event);
-                double energy = std::get<1>(event);
-                int obj_id = std::get<2>(event);
-                outfile << id << "," << pos[0] << "," << pos[1] << "," << pos[2] << "," << energy << "," << obj_id << std::endl; 
+            if (coincidence == true) {
+                if (coincidence_gate(c_ids, photon_ptr)) {
+                    for (std::tuple<Vector3d, double, int> event : *(*photon_ptr).get_events()) {
+                        Vector3d pos = std::get<0>(event);
+                        double energy = std::get<1>(event);
+                        int obj_id = std::get<2>(event);
+                        outfile << id << "," << pos[0] << "," << pos[1] << "," 
+                            << pos[2] << "," << energy << "," << obj_id << std::endl; 
+                    }
+                }
+            }
+            else {
+                for (std::tuple<Vector3d, double, int> event : *(*photon_ptr).get_events()) {
+                    Vector3d pos = std::get<0>(event);
+                    double energy = std::get<1>(event);
+                    int obj_id = std::get<2>(event);
+                    outfile << id << "," << pos[0] << "," << pos[1] << "," << pos[2] 
+                        << "," << energy << "," << obj_id << std::endl; 
+                }
             }
         }
+        
         outfile.close();
         std::cout << "\r";
     }
